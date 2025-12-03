@@ -8,7 +8,7 @@ use gloo_utils::window;
 use js_sys::Array;
 use serde::de::Deserialize;
 use serde::ser::Serialize;
-use web_sys::{Blob, BlobPropertyBag, Url};
+use web_sys::{Blob, BlobPropertyBag, Url, WorkerOptions, WorkerType};
 
 use super::bridge::{CallbackMap, WorkerBridge};
 use super::handler_id::HandlerId;
@@ -18,7 +18,7 @@ use super::traits::Worker;
 use super::{Callback, Shared};
 use crate::codec::{Bincode, Codec};
 
-fn create_worker(path: &str) -> DedicatedWorker {
+fn create_worker(path: &str, options: Option<&WorkerOptions>) -> DedicatedWorker {
     let js_shim_url = Url::new_with_base(
         path,
         &window().location().href().expect("failed to read href."),
@@ -29,15 +29,30 @@ fn create_worker(path: &str) -> DedicatedWorker {
     let wasm_url = js_shim_url.replace(".js", "_bg.wasm");
 
     let array = Array::new();
-    array.push(&format!(r#"importScripts("{js_shim_url}");wasm_bindgen("{wasm_url}");"#).into());
+
+    if options.is_some_and(|options| matches!(options.get_type(), Some(WorkerType::Module))) {
+        array.push(&format!(r#"import init from "{js_shim_url}";await init();"#).into());
+    } else {
+        array
+            .push(&format!(r#"importScripts("{js_shim_url}");wasm_bindgen({{module_or_path:"{wasm_url}"}});"#).into());
+    }
+
+    let prop_bag = BlobPropertyBag::new();
+    prop_bag.set_type("application/javascript");
+
     let blob = Blob::new_with_str_sequence_and_options(
         &array,
-        BlobPropertyBag::new().type_("application/javascript"),
+        &prop_bag,
     )
     .unwrap();
+
     let url = Url::create_object_url_with_blob(&blob).unwrap();
 
-    DedicatedWorker::new(&url).expect("failed to spawn worker")
+    if let Some(options) = options {
+        DedicatedWorker::new_with_options(&url, options).expect("failed to spawn worker")
+    } else {
+        DedicatedWorker::new(&url).expect("failed to spawn worker")
+    }
 }
 
 /// A spawner to create workers.
@@ -160,23 +175,27 @@ where
     }
 
     /// Spawns a Worker.
-    pub fn spawn(&self, path: &str) -> WorkerBridge<W>
+    pub fn spawn(&self, path: &str, options: Option<&WorkerOptions>) -> WorkerBridge<W>
     where
         W::Input: Serialize + for<'de> Deserialize<'de>,
         W::Output: Serialize + for<'de> Deserialize<'de>,
     {
-        let worker = create_worker(path);
+        let worker = create_worker(path, options);
 
         self.spawn_inner(worker)
     }
 
     /// Spawns a Worker with a loader shim script.
-    pub fn spawn_with_loader(&self, loader_path: &str) -> WorkerBridge<W>
+    pub fn spawn_with_loader(&self, path: &str, options: Option<&WorkerOptions>) -> WorkerBridge<W>
     where
         W::Input: Serialize + for<'de> Deserialize<'de>,
         W::Output: Serialize + for<'de> Deserialize<'de>,
     {
-        let worker = DedicatedWorker::new(loader_path).expect("failed to spawn worker");
+        let worker = if let Some(options) = options {
+            DedicatedWorker::new_with_options(path, options).expect("failed to spawn worker")
+        } else {
+            DedicatedWorker::new(path).expect("failed to spawn worker")
+        };
 
         self.spawn_inner(worker)
     }

@@ -1,6 +1,8 @@
 use serde::de::Deserialize;
 use serde::ser::Serialize;
 
+use web_sys::WorkerOptions;
+
 use super::bridge::ReactorBridge;
 use super::scope::ReactorScoped;
 use super::traits::Reactor;
@@ -41,27 +43,27 @@ where
     }
 
     /// Spawns a reactor worker.
-    pub fn spawn(mut self, path: &str) -> ReactorBridge<R>
+    pub fn spawn(mut self, path: &str, options: Option<&WorkerOptions>) -> ReactorBridge<R>
     where
         <R::Scope as ReactorScoped>::Input: Serialize + for<'de> Deserialize<'de>,
         <R::Scope as ReactorScoped>::Output: Serialize + for<'de> Deserialize<'de>,
     {
         let rx = ReactorBridge::register_callback(&mut self.inner);
 
-        let inner = self.inner.spawn(path);
+        let inner = self.inner.spawn(path, options);
 
         ReactorBridge::new(inner, rx)
     }
 
     /// Spawns a Reactor Worker with a loader shim script.
-    pub fn spawn_with_loader(mut self, loader_path: &str) -> ReactorBridge<R>
+    pub fn spawn_with_loader(mut self, loader_path: &str, options: Option<&WorkerOptions>) -> ReactorBridge<R>
     where
         <R::Scope as ReactorScoped>::Input: Serialize + for<'de> Deserialize<'de>,
         <R::Scope as ReactorScoped>::Output: Serialize + for<'de> Deserialize<'de>,
     {
         let rx = ReactorBridge::register_callback(&mut self.inner);
 
-        let inner = self.inner.spawn_with_loader(loader_path);
+        let inner = self.inner.spawn_with_loader(loader_path, options);
 
         ReactorBridge::new(inner, rx)
     }

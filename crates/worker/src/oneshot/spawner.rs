@@ -1,6 +1,8 @@
 use serde::de::Deserialize;
 use serde::ser::Serialize;
 
+use web_sys::WorkerOptions;
+
 use super::bridge::OneshotBridge;
 use super::traits::Oneshot;
 use super::worker::OneshotWorker;
@@ -40,27 +42,27 @@ where
     }
 
     /// Spawns an Oneshot Worker.
-    pub fn spawn(mut self, path: &str) -> OneshotBridge<N>
+    pub fn spawn(mut self, path: &str, options: Option<&WorkerOptions>) -> OneshotBridge<N>
     where
         N::Input: Serialize + for<'de> Deserialize<'de>,
         N::Output: Serialize + for<'de> Deserialize<'de>,
     {
         let rx = OneshotBridge::register_callback(&mut self.inner);
 
-        let inner = self.inner.spawn(path);
+        let inner = self.inner.spawn(path, options);
 
         OneshotBridge::new(inner, rx)
     }
 
     /// Spawns an Oneshot Worker with a loader shim script.
-    pub fn spawn_with_loader(mut self, loader_path: &str) -> OneshotBridge<N>
+    pub fn spawn_with_loader(mut self, loader_path: &str, options: Option<&WorkerOptions>) -> OneshotBridge<N>
     where
         N::Input: Serialize + for<'de> Deserialize<'de>,
         N::Output: Serialize + for<'de> Deserialize<'de>,
     {
         let rx = OneshotBridge::register_callback(&mut self.inner);
 
-        let inner = self.inner.spawn_with_loader(loader_path);
+        let inner = self.inner.spawn_with_loader(loader_path, options);
 
         OneshotBridge::new(inner, rx)
     }
